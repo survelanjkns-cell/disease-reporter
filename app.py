@@ -1,35 +1,60 @@
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
+import base64
 
 st.set_page_config(page_title="Wabak Report Generator", layout="centered")
 
-st.title("📄 Disease Report Generator")
-st.write("Upload your Excel file to generate the Selangor Disease Table.")
+def create_pdf(df):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    
+    # Title
+    pdf.cell(190, 10, "Laporan Ringkasan Penyakit (SELANGOR 2)", ln=True, align="C")
+    pdf.ln(10)
+    
+    # Table Header
+    pdf.set_font("Arial", "B", 12)
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(140, 10, "Nama Penyakit", 1, 0, "C", True)
+    pdf.cell(50, 10, "Jumlah", 1, 1, "C", True)
+    
+    # Table Body
+    pdf.set_font("Arial", "", 12)
+    for index, row in df.iterrows():
+        pdf.cell(140, 10, str(row['Disease Name']), 1)
+        pdf.cell(50, 10, str(row['Cumulative Count']), 1, 1, "C")
+    
+    return pdf.output(dest="S").encode("latin-1")
 
-# 1. File Uploader
+st.title("📄 Disease Report Generator")
+
 uploaded_file = st.file_uploader("Drop your Excel file here", type=["xlsx"])
 
 if uploaded_file:
     try:
-        # 2. Read the specific sheet
         df = pd.read_excel(uploaded_file, sheet_name="SELANGOR 2")
         
-        # 3. Process Column F (Penyakit)
-        # We use iloc[:, 5] because F is the 6th column (0-indexed)
+        # Data Processing
         disease_col = df.iloc[:, 5].dropna().astype(str)
-        
-        # Clean data: Remove the header if it's in the rows and strip spaces
         disease_col = disease_col[disease_col.str.upper() != "PENYAKIT"]
         disease_counts = disease_col.value_counts().reset_index()
         disease_counts.columns = ['Disease Name', 'Cumulative Count']
 
-        # 4. Display Results
+        # Display Table
         st.subheader("Summary Table: SELANGOR 2")
         st.table(disease_counts)
 
-        # 5. Export to CSV (Simple alternative to PDF for now)
-        csv = disease_counts.to_csv(index=False).encode('utf-8')
-        st.download_button("Download Report as CSV", data=csv, file_name="disease_report.csv")
+        # PDF Generation
+        pdf_data = create_pdf(disease_counts)
+        
+        st.download_button(
+            label="Download Report as PDF",
+            data=pdf_data,
+            file_name="Laporan_Penyakit_Selangor.pdf",
+            mime="application/pdf",
+        )
 
     except Exception as e:
-        st.error(f"Error: Could not find 'SELANGOR 2' or Column F. {e}")
+        st.error(f"Error processing file: {e}")
